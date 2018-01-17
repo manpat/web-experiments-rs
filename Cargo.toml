@@ -6,3 +6,4 @@ build = "build.rs"
 
 [dependencies]
 common = { git = "https://github.com/manpat/common-rs.git" }
+# common = { path = "../common" }

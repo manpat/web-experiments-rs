@@ -40,7 +40,7 @@ fn main() {
 		let kaleidoscope_shader = Shader::new(res::shaders::BASIC_TRANSFORM2_VS, res::shaders::KALEIDOSCOPE_FS);
 		kaleidoscope_shader.use_program();
 
-		let mut main_fb = FramebufferBuilder::new_unsized()
+		let mut main_fb = FramebufferBuilder::new(Vec2i::splat(512))
 			.add_target()
 			.finalize();
 
@@ -62,26 +62,23 @@ fn main() {
 		let mut paper = Paper::new();
 		let mut time = 0.0f32;
 
+		let mut screen_size = Vec2i::zero();
+
 		loop {
 			for e in events.iter() {
 				match *e {
 					Event::Resize(sz) => unsafe {
+						screen_size = sz;
 						gl::Viewport(0, 0, sz.x, sz.y);
 
-						main_fb.resize(sz);
-						main_fb.bind();
-						gl::Clear(gl::COLOR_BUFFER_BIT);
-						Framebuffer::unbind();
-
 						let aspect = sz.x as f32 / sz.y as f32;
-						let proj = Mat4::scale(Vec3::new(1.0/aspect, 1.0, 1.0));
 
 						kaleidoscope_shader.use_program();
 						kaleidoscope_shader.set_proj(&Mat4::ident());
 						kaleidoscope_shader.set_uniform_f32("u_aspect", aspect);
 
 						paper_shader.use_program();
-						paper_shader.set_proj(&proj);
+						paper_shader.set_proj(&Mat4::ident());
 					}
 
 					_ => {}
@@ -106,7 +103,8 @@ fn main() {
 				paper.build_line(&pts, 0.05, Color::rgba(0.9, 0.7, 1.0, 0.007));				
 			}
 
-			paper.build_circle(Vec2::new((time*0.1).sin()*0.2, 0.0), 0.4, Color::rgb(1.0, 0.5, 0.5));
+			paper.build_circle(Vec2::new((time*0.1).sin()*0.2, 0.0), 0.4, Color::hsv(0.0, 0.5, 1.0));
+			// paper.build_circle(Vec2::new((time*0.1).sin()*0.2, 0.0), 0.4, Color::rgb(1.0, 0.5, 0.5));
 			paper.build_circle(Vec2::from_angle(time*0.34 + 0.3) * (0.7 + time.cos() * 0.06), 0.1, Color::rgb(1.0, 0.8, 0.5));
 			paper.build_circle(Vec2::from_angle(time*0.67 + 0.8) * (0.7 + time.cos() * 0.06), 0.1, Color::rgb(1.0, 0.5, 0.8));
 
@@ -117,9 +115,12 @@ fn main() {
 			paper.build_circle(Vec2::new(0.0,-1.0), 0.2, Color::rgb(0.7, 0.5, 0.9));
 
 			main_fb.bind();
+			unsafe { gl::Viewport(0, 0, 512, 512); }
 			paper_shader.use_program();
 			paper.draw();
 			Framebuffer::unbind();
+
+			unsafe { gl::Viewport(0, 0, screen_size.x, screen_size.y); }
 
 			let _guard = main_fb.get_target(0).unwrap().bind_guard();
 			kaleidoscope_shader.use_program();
