@@ -64,6 +64,8 @@ fn main() {
 
 		let mut screen_size = Vec2i::zero();
 
+		let mut elements = generate_element_list();
+
 		loop {
 			for e in events.iter() {
 				match *e {
@@ -81,6 +83,10 @@ fn main() {
 						paper_shader.set_proj(&Mat4::ident());
 					}
 
+					Event::Click(_) => {
+						elements = generate_element_list();
+					}
+
 					_ => {}
 				}
 			}
@@ -91,28 +97,25 @@ fn main() {
 
 			paper.clear();
 
-			for i in -10..11 {
-				let start = i as f32 / 5.0;
-				let end = start + 0.3;
+			// for i in -10..11 {
+			// 	let start = i as f32 / 5.0;
+			// 	let end = start + 0.3;
 
-				let pts = [
-					Vec2::new(start,-1.0),
-					Vec2::new(  end, 1.0),
-				];
+			// 	let pts = [
+			// 		Vec2::new(start,-1.0),
+			// 		Vec2::new(  end, 1.0),
+			// 	];
 
-				paper.build_line(&pts, 0.05, Color::rgba(0.9, 0.7, 1.0, 0.007));				
+			// 	paper.build_line(&pts, 0.05, Color::rgba(0.9, 0.7, 1.0, 0.007));				
+			// }
+
+			for el in elements.iter() {
+				let phase = el.phase_coefficient * time + el.phase_offset;
+				let orbit_mod = (time * el.orbit_offset_rate).sin() * el.orbit_offset_coefficient;
+				let pos = Vec2::new(phase.x.sin(), phase.y.cos()) * el.orbit_coefficient * (1.0 + orbit_mod);
+
+				paper.build_circle(pos, el.radius, el.color);
 			}
-
-			paper.build_circle(Vec2::new((time*0.1).sin()*0.2, 0.0), 0.4, Color::hsv(0.0, 0.5, 1.0));
-			// paper.build_circle(Vec2::new((time*0.1).sin()*0.2, 0.0), 0.4, Color::rgb(1.0, 0.5, 0.5));
-			paper.build_circle(Vec2::from_angle(time*0.34 + 0.3) * (0.7 + time.cos() * 0.06), 0.1, Color::rgb(1.0, 0.8, 0.5));
-			paper.build_circle(Vec2::from_angle(time*0.67 + 0.8) * (0.7 + time.cos() * 0.06), 0.1, Color::rgb(1.0, 0.5, 0.8));
-
-			paper.build_circle(Vec2::new(time.sin() * 1.5, 0.7 * (time/2.3).cos()), 0.2, Color::rgb(0.5, 1.0, 0.5));
-			paper.build_circle(Vec2::new(-(time*0.7).cos(), 0.3 * (time/2.3).sin()), 0.2, Color::rgb(0.5, 0.5, 1.0));
-
-			paper.build_circle(Vec2::new(1.0, 0.0), 0.2, Color::rgb(0.5, 0.9, 0.9));
-			paper.build_circle(Vec2::new(0.0,-1.0), 0.2, Color::rgb(0.7, 0.5, 0.9));
 
 			main_fb.bind();
 			unsafe { gl::Viewport(0, 0, 512, 512); }
@@ -133,4 +136,40 @@ fn main() {
 			yield;
 		}
 	});
+}
+
+struct Element {
+	color: Color,
+	radius: f32,
+	orbit_coefficient: Vec2,
+	orbit_offset_rate: f32,
+	orbit_offset_coefficient: f32,
+
+	phase_coefficient: Vec2,
+	phase_offset: Vec2,
+}
+
+fn generate_element_list() -> Vec<Element> {
+	use rand::{Rng, Rand, thread_rng};
+
+	let mut rng = thread_rng();
+	let mut els = Vec::new();
+
+	let num_els = rng.gen_range(5, 10);
+
+	for _ in 0..num_els {
+		els.push(Element{
+			color: Color::hsv(rng.gen_range(0.0, 360.0), 0.5, 1.0),
+			radius: rng.gen_range(0.05, 0.25),
+
+			orbit_coefficient: Vec2::rand(&mut rng) * 2.0 - Vec2::splat(1.0),
+			orbit_offset_coefficient: rng.gen_range(0.0, 0.2),
+			orbit_offset_rate: rng.gen_range(0.0, PI/2.0),
+
+			phase_coefficient: Vec2::rand(&mut rng) * 2.0 * PI - Vec2::splat(PI),
+			phase_offset: Vec2::rand(&mut rng) * 2.0 * PI - Vec2::splat(PI),
+		});
+	}
+
+	els
 }
