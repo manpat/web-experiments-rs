@@ -6,6 +6,8 @@ use experiments::*;
 use experiments::rendering::mesh_builder::*;
 use experiments::rendering::framebuffer::*;
 
+use rand::{Rng, thread_rng};
+
 use events::Event;
 
 #[derive(Copy, Clone)]
@@ -39,6 +41,7 @@ fn main() {
 		let paper_shader = Shader::new(res::shaders::PAPER_VS, res::shaders::PAPER_FS);
 		let kaleidoscope_shader = Shader::new(res::shaders::BASIC_TRANSFORM2_VS, res::shaders::KALEIDOSCOPE_FS);
 		kaleidoscope_shader.use_program();
+		kaleidoscope_shader.set_uniform_f32("u_sections", thread_rng().gen_range(4u32, 8u32) as f32);
 
 		let mut main_fb = FramebufferBuilder::new(Vec2i::splat(512))
 			.add_target()
@@ -85,6 +88,9 @@ fn main() {
 
 					Event::Click(_) => {
 						elements = generate_element_list();
+
+						kaleidoscope_shader.use_program();
+						kaleidoscope_shader.set_uniform_f32("u_sections", thread_rng().gen_range(4u32, 8u32) as f32);
 					}
 
 					_ => {}
