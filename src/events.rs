@@ -99,7 +99,7 @@ fn on_touch_move(_: i32, e: *const EmscriptenTouchEvent, ud: *mut CVoid) -> i32 
 	let pos = Vec2i::new(e.touches[0].clientX as _, e.touches[0].clientY as _);
 	event_queue.push(Event::Move(pos));
 	
-	1
+	0
 }
 
 unsafe extern "C"
@@ -112,7 +112,7 @@ fn on_touch_start(_: i32, e: *const EmscriptenTouchEvent, ud: *mut CVoid) -> i32
 	let pos = Vec2i::new(e.touches[0].clientX as _, e.touches[0].clientY as _);
 	event_queue.push(Event::Down(pos));
 	
-	1
+	0
 }
 
 unsafe extern "C"
@@ -122,8 +122,17 @@ fn on_touch_end(_: i32, e: *const EmscriptenTouchEvent, ud: *mut CVoid) -> i32 {
 
 	if e.touches[0].identifier != 0 { return 0 }
 
+	use std::mem::uninitialized;
+
+	let mut fse: EmscriptenFullscreenChangeEvent = uninitialized();
+	emscripten_get_fullscreen_status(&mut fse);
+
+	if fse.isFullscreen == 0 {
+		js!{ b"Module.requestFullscreen(1,1,0)" };
+	}
+
 	let pos = Vec2i::new(e.touches[0].clientX as _, e.touches[0].clientY as _);
 	event_queue.push(Event::Up(pos));
 	
-	1
+	0
 }
