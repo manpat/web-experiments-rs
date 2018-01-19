@@ -124,6 +124,7 @@ fn on_touch_end(_: i32, e: *const EmscriptenTouchEvent, ud: *mut CVoid) -> i32 {
 
 	use std::mem::uninitialized;
 
+	// TODO: Make this requestable
 	let mut fse: EmscriptenFullscreenChangeEvent = uninitialized();
 	emscripten_get_fullscreen_status(&mut fse);
 

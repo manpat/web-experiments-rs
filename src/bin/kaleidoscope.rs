@@ -103,18 +103,6 @@ fn main() {
 
 			paper.clear();
 
-			// for i in -10..11 {
-			// 	let start = i as f32 / 5.0;
-			// 	let end = start + 0.3;
-
-			// 	let pts = [
-			// 		Vec2::new(start,-1.0),
-			// 		Vec2::new(  end, 1.0),
-			// 	];
-
-			// 	paper.build_line(&pts, 0.05, Color::rgba(0.9, 0.7, 1.0, 0.007));				
-			// }
-
 			for el in elements.iter() {
 				let phase = el.phase_coefficient * time + el.phase_offset;
 				let orbit_mod = (time * el.orbit_offset_rate).sin() * el.orbit_offset_coefficient;
