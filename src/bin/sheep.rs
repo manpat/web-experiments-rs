@@ -138,6 +138,7 @@ struct Sheep {
 	target_pos: Option<Vec2>,
 
 	feet_targets: [(Vec2, Vec2, f32); 4],
+	feet_cycle_timeouts: [f32; 2],
 }
 
 impl Sheep {
@@ -165,6 +166,7 @@ impl Sheep {
 
 			target_pos: None,
 			feet_targets,
+			feet_cycle_timeouts: [0.0; 2],
 		}
 	}
 
@@ -208,10 +210,15 @@ impl Sheep {
 			self.body_pos = self.body_pos + diff.normalize() * (dist - BODY_LENGTH);
 		}
 
+		let mut segment_to_update = [(0, -1.0, Vec2::zero()); 2];
+
+		self.feet_cycle_timeouts[0] -= 1.0/60.0;
+		self.feet_cycle_timeouts[1] -= 1.0/60.0;
+
 		for (i, &mut (ref mut start, ref mut target, ref mut phase)) in self.feet_targets.iter_mut().enumerate() {
 			*phase += 4.0/60.0;
 
-			if *phase > 1.0 {
+			if *phase > 1.0 && self.feet_cycle_timeouts[i/2] < 0.0 {
 				*start = *target;
 
 				let (pos, heading, offset) = [
@@ -230,11 +237,25 @@ impl Sheep {
 
 				let foot_diff = *start - foot_base;
 
-				if foot_diff.dot(direction) < -BODY_SIZE / 4.0 || foot_diff.dot(perp_dir).abs() > BODY_SIZE / 4.0 {
-					*target = foot_base + direction * camera_coeff() * BODY_SIZE / 2.0;
-					*phase = 0.0;
+				if foot_diff.dot(direction) < -LEG_LENGTH * (PI/7.0).sin() || foot_diff.dot(perp_dir).abs() > LEG_LENGTH * (PI/8.0).sin() {
+					let toupd = &mut segment_to_update[i/2];
+					let dist = foot_diff.length();
+
+					if toupd.1 < dist {
+						toupd.0 = i;
+						toupd.1 = dist;
+						toupd.2 = foot_base + direction * camera_coeff() * LEG_LENGTH * (PI/4.0).sin();
+					}
 				}
 			}
+		}
+
+		for (&(foot, dist, target), cycle_timeout) in segment_to_update.iter().zip(self.feet_cycle_timeouts.iter_mut()) {
+			if dist < 0.0 { continue }
+
+			self.feet_targets[foot].1 = target;
+			self.feet_targets[foot].2 = 0.0;
+			*cycle_timeout = 0.4;
 		}
 	}
 
@@ -289,7 +310,7 @@ impl Sheep {
 			let phase = phase.clamp(0.0, 1.0);
 
 			let foot_pos = phase.ease_linear(foot_start, foot_target)
-				+ Vec2::new(0.0, (phase*PI).sin() * (foot_start - foot_target).length() * 0.6);
+				+ Vec2::new(0.0, (phase*PI).sin() * (foot_start - foot_target).length() * 0.4);
 
 			paper.build_line(&[shoulder, foot_pos], LEG_THICKNESS, FACE_COLOR);
 		}
