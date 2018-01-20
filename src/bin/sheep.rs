@@ -60,7 +60,7 @@ fn main() {
 						paper_shader.set_proj(&Mat4::scale(Vec3::new(1.0/aspect, 1.0, 1.0)));
 					}
 
-					Event::Click(pos) => {
+					Event::Up(pos) => {
 						let pos = screen_to_gl(screen_size, pos) / Vec2::new(1.0, CAMERA_ANGLE.sin());
 						the_sheep.set_target(pos);
 					}
