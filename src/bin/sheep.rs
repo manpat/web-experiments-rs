@@ -124,7 +124,7 @@ const CAMERA_ANGLE: f32 = PI/10.0;
 const FRONT_SHOULDER_OFFSET: f32 = 0.0;
 const BACK_SHOULDER_OFFSET: f32 = -BODY_SIZE/3.0;
 
-const LEG_LENGTH: f32 = SHOULDER_SIZE + 0.08;
+const LEG_LENGTH: f32 = SHOULDER_SIZE + 0.05;
 
 fn camera_coeff() -> Vec2 { Vec2::new(1.0, CAMERA_ANGLE.sin()) }
 
@@ -216,7 +216,7 @@ impl Sheep {
 		self.feet_cycle_timeouts[1] -= 1.0/60.0;
 
 		for (i, &mut (ref mut start, ref mut target, ref mut phase)) in self.feet_targets.iter_mut().enumerate() {
-			*phase += 4.0/60.0;
+			*phase += 3.0/60.0;
 
 			if *phase > 1.0 && self.feet_cycle_timeouts[i/2] < 0.0 {
 				*start = *target;
@@ -237,7 +237,7 @@ impl Sheep {
 
 				let foot_diff = *start - foot_base;
 
-				if foot_diff.dot(direction) < -LEG_LENGTH * (PI/7.0).sin() || foot_diff.dot(perp_dir).abs() > LEG_LENGTH * (PI/8.0).sin() {
+				if foot_diff.dot(direction) < -LEG_LENGTH * (PI/10.0).sin() || foot_diff.dot(perp_dir).abs() > LEG_LENGTH * (PI/10.0).sin() {
 					let toupd = &mut segment_to_update[i/2];
 					let dist = foot_diff.length();
 
