@@ -1,4 +1,5 @@
 #![feature(generators)]
+#![feature(slice_patterns)]
 
 extern crate experiments;
 use experiments::*;
@@ -71,7 +72,6 @@ fn main() {
 					Event::Click(pos) => {
 						let pos = screen_to_gl(screen_size, pos) / camera_coeff();
 						the_sheep.set_target(pos);
-						// sheep[0].set_target(pos);
 					}
 
 					_ => {}
@@ -121,6 +121,11 @@ const LEG_THICKNESS: f32 = 0.04;
 
 const CAMERA_ANGLE: f32 = PI/10.0;
 
+const FRONT_SHOULDER_OFFSET: f32 = 0.0;
+const BACK_SHOULDER_OFFSET: f32 = -BODY_SIZE/3.0;
+
+const LEG_LENGTH: f32 = SHOULDER_SIZE + 0.08;
+
 fn camera_coeff() -> Vec2 { Vec2::new(1.0, CAMERA_ANGLE.sin()) }
 
 struct Sheep {
@@ -131,18 +136,35 @@ struct Sheep {
 	current_speed: f32,
 
 	target_pos: Option<Vec2>,
+
+	feet_targets: [(Vec2, Vec2, f32); 4],
 }
 
 impl Sheep {
 	fn new(pos: Vec2, heading: f32) -> Self {
-		Sheep{
+		let body_pos = pos - Vec2::from_angle(heading) * BODY_LENGTH;
+
+		let (shoulder_fl, shoulder_fr) = Sheep::calc_shoulder_positions(pos, heading, FRONT_SHOULDER_OFFSET);
+		let (shoulder_bl, shoulder_br) = Sheep::calc_shoulder_positions(body_pos, heading, BACK_SHOULDER_OFFSET);
+
+		let leg_vector = Vec2::new(0.0, LEG_LENGTH);
+		
+		let feet_targets = [
+			(shoulder_fl-leg_vector, shoulder_fl-leg_vector, 1.0),
+			(shoulder_fr-leg_vector, shoulder_fr-leg_vector, 1.0),
+			(shoulder_bl-leg_vector, shoulder_bl-leg_vector, 1.0),
+			(shoulder_br-leg_vector, shoulder_br-leg_vector, 1.0),
+		];
+
+		Sheep {
 			pos,
-			body_pos: pos - Vec2::from_angle(heading) * BODY_LENGTH,
+			body_pos,
 
 			heading,
 			current_speed: 0.0,
 
 			target_pos: None,
+			feet_targets,
 		}
 	}
 
@@ -168,9 +190,9 @@ impl Sheep {
 
 				self.heading += heading_diff.clamp(-PI/4.0, PI/4.0) / 60.0;
 
-				let forward_thresh = PI*7.0/8.0;
+				let forward_thresh = PI;
 				let forwardness = (forward_thresh - heading_diff.abs()).max(0.0) / forward_thresh;
-				let target_speed = dist.min(0.3) * (1.0 - (1.0 - forwardness).powi(2));
+				let target_speed = dist.min(0.3) * (1.0 - (1.0 - forwardness).powi(4));
 
 				self.current_speed = (1.0/60.0).ease_linear(self.current_speed, target_speed);
 			}
@@ -185,6 +207,35 @@ impl Sheep {
 		if dist > BODY_LENGTH {
 			self.body_pos = self.body_pos + diff.normalize() * (dist - BODY_LENGTH);
 		}
+
+		for (i, &mut (ref mut start, ref mut target, ref mut phase)) in self.feet_targets.iter_mut().enumerate() {
+			*phase += 4.0/60.0;
+
+			if *phase > 1.0 {
+				*start = *target;
+
+				let (pos, heading, offset) = [
+					(self.pos, self.heading, FRONT_SHOULDER_OFFSET),
+					(self.body_pos, self.heading, BACK_SHOULDER_OFFSET)
+				][i / 2];
+
+				let (shoulder_l, shoulder_r) = Sheep::calc_shoulder_positions(pos, heading, offset);
+				let shoulder = [shoulder_l, shoulder_r][i % 2];
+
+				let leg_vector = Vec2::new(0.0, LEG_LENGTH);
+				let foot_base = shoulder - leg_vector;
+
+				let direction = Vec2::from_angle(heading);
+				let perp_dir = direction.perp();
+
+				let foot_diff = *start - foot_base;
+
+				if foot_diff.dot(direction) < -BODY_SIZE / 4.0 || foot_diff.dot(perp_dir).abs() > BODY_SIZE / 4.0 {
+					*target = foot_base + direction * camera_coeff() * BODY_SIZE / 2.0;
+					*phase = 0.0;
+				}
+			}
+		}
 	}
 
 	fn draw(&mut self, paper: &mut Paper) {
@@ -192,9 +243,6 @@ impl Sheep {
 
 		let body_heading = (self.pos - self.body_pos).to_angle();
 		let head_pos = self.pos + Vec2::from_angle(self.heading) * 0.15 + Vec2::new(0.0, BODY_SIZE/3.0);
-
-		let front_shoulder_offset = 0.0;
-		let back_shoulder_offset = -BODY_SIZE/3.0;
 
 		let heading_south = self.heading.sin() < 0.0;
 
@@ -205,21 +253,20 @@ impl Sheep {
 		if !heading_south { draw_head(paper); }
 
 		if self.body_pos.y >= self.pos.y {
-			Sheep::draw_body_segment(paper, self.body_pos, body_heading, back_shoulder_offset);
-			Sheep::draw_body_segment(paper, self.pos, self.heading, front_shoulder_offset);
+			Sheep::draw_body_segment(paper, self.body_pos, body_heading, BACK_SHOULDER_OFFSET, &self.feet_targets[2..4]);
+			Sheep::draw_body_segment(paper, self.pos, self.heading, FRONT_SHOULDER_OFFSET, &self.feet_targets[0..2]);
 		} else {
-			Sheep::draw_body_segment(paper, self.pos, self.heading, front_shoulder_offset);
-			Sheep::draw_body_segment(paper, self.body_pos, body_heading, back_shoulder_offset);
+			Sheep::draw_body_segment(paper, self.pos, self.heading, FRONT_SHOULDER_OFFSET, &self.feet_targets[0..2]);
+			Sheep::draw_body_segment(paper, self.body_pos, body_heading, BACK_SHOULDER_OFFSET, &self.feet_targets[2..4]);
 		}
 
 		if heading_south { draw_head(paper); }
 	}
 
-	fn draw_body_segment(paper: &mut Paper, pos: Vec2, heading: f32, offset: f32) {
+	fn calc_shoulder_positions(body_pos: Vec2, heading: f32, offset: f32) -> (Vec2, Vec2) {
 		let camera_coeff = camera_coeff();
-		let pos = pos * camera_coeff;
 
-		let shoulder_base = pos - Vec2::new(0.0, BODY_SIZE*0.4)
+		let shoulder_base = body_pos * camera_coeff - Vec2::new(0.0, BODY_SIZE*0.4)
 			+ Vec2::from_angle(heading)*camera_coeff*offset;
 
 		let shoulder_width = BODY_SIZE*0.4;
@@ -227,10 +274,25 @@ impl Sheep {
 		let left_shoulder = shoulder_base + Vec2::from_angle(heading + PI/2.0) * camera_coeff * shoulder_width;
 		let right_shoulder = shoulder_base + Vec2::from_angle(heading - PI/2.0) * camera_coeff * shoulder_width;
 
-		let leg_vector = Vec2::new(0.0, SHOULDER_SIZE+0.05);
+		(left_shoulder, right_shoulder)
+	}
 
-		paper.build_line(&[left_shoulder, left_shoulder-leg_vector], LEG_THICKNESS, FACE_COLOR);
-		paper.build_line(&[right_shoulder, right_shoulder-leg_vector], LEG_THICKNESS, FACE_COLOR);
+	fn draw_body_segment(paper: &mut Paper, pos: Vec2, heading: f32, offset: f32, feet_targets: &[(Vec2,Vec2,f32)]) {
+		assert!(feet_targets.len() >= 2);
+
+		let (left_shoulder, right_shoulder) = Sheep::calc_shoulder_positions(pos, heading, offset);
+
+		let camera_coeff = camera_coeff();
+		let pos = pos * camera_coeff;
+
+		for (&(foot_start, foot_target, phase), &shoulder) in feet_targets[0..2].iter().zip([left_shoulder, right_shoulder].iter()) {
+			let phase = phase.clamp(0.0, 1.0);
+
+			let foot_pos = phase.ease_linear(foot_start, foot_target)
+				+ Vec2::new(0.0, (phase*PI).sin() * (foot_start - foot_target).length() * 0.6);
+
+			paper.build_line(&[shoulder, foot_pos], LEG_THICKNESS, FACE_COLOR);
+		}
 
 		paper.build_circle(left_shoulder, SHOULDER_SIZE, BODY_COLOR);
 		paper.build_circle(pos, BODY_SIZE, BODY_COLOR);
