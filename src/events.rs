@@ -20,18 +20,20 @@ pub unsafe fn initialise_ems_event_queue(queue: &mut Vec<Event>) {
 
 	let evt_ptr = transmute(queue);
 
+	let target = b"#document\0".as_ptr() as _;
+
 	on_resize(0, null(), evt_ptr);
 	emscripten_set_resize_callback(null(), evt_ptr, 0, Some(on_resize));
-	emscripten_set_click_callback(null(), evt_ptr, 0, Some(on_click));
+	emscripten_set_click_callback(target, evt_ptr, 1, Some(on_click));
 
-	emscripten_set_mousemove_callback(null(), evt_ptr, 0, Some(on_mouse_move));
-	emscripten_set_mousedown_callback(null(), evt_ptr, 0, Some(on_mouse_down));
-	emscripten_set_mouseup_callback(null(), evt_ptr, 0, Some(on_mouse_up));
+	emscripten_set_mousemove_callback(target, evt_ptr, 0, Some(on_mouse_move));
+	emscripten_set_mousedown_callback(target, evt_ptr, 0, Some(on_mouse_down));
+	emscripten_set_mouseup_callback(target, evt_ptr, 0, Some(on_mouse_up));
 
-	emscripten_set_touchstart_callback(null(), evt_ptr, 0, Some(on_touch_start));
-	emscripten_set_touchmove_callback(null(), evt_ptr, 0, Some(on_touch_move));
-	emscripten_set_touchend_callback(null(), evt_ptr, 0, Some(on_touch_end));
-	emscripten_set_touchcancel_callback(null(), evt_ptr, 0, Some(on_touch_end));
+	emscripten_set_touchstart_callback(target, evt_ptr, 1, Some(on_touch_start));
+	emscripten_set_touchmove_callback(target, evt_ptr, 1, Some(on_touch_move));
+	emscripten_set_touchend_callback(target, evt_ptr, 1, Some(on_touch_end));
+	emscripten_set_touchcancel_callback(target, evt_ptr, 1, Some(on_touch_end));
 }
 
 unsafe extern "C"
