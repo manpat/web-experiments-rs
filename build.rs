@@ -44,13 +44,6 @@ r##"<html>
 				display: block;
 			}
 		</style>
-
-		<script>
-			// An attempt to stop ios from fucken allowing zooming
-			document.addEventListener('gesturestart', function (e) {
-			    e.preventDefault();
-			});
-		</script>
 	</head>
 
 	<body>
