@@ -84,7 +84,7 @@ fn main() {
 						paper_shader.set_proj(&Mat4::ident());
 					}
 
-					Event::Click(_) => {
+					Event::Down(_) => {
 						elements = generate_element_list();
 
 						kaleidoscope_shader.use_program();
