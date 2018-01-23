@@ -5,7 +5,7 @@ extern crate experiments;
 use experiments::*;
 use experiments::rendering::mesh_builder::*;
 
-use rand::{Rng, thread_rng};
+// use rand::{Rng, thread_rng};
 
 use events::Event;
 
@@ -41,8 +41,6 @@ fn main() {
 		paper_shader.use_program();
 
 		let mut paper = Paper::new();
-		let mut time = 0.0f32;
-
 		let mut screen_size = Vec2i::zero();
 
 		let mut the_sheep = Sheep::new(Vec2::zero(), -PI/4.0);
@@ -68,8 +66,6 @@ fn main() {
 					_ => {}
 				}
 			}
-
-			time += 1.0/60.0;
 
 			events.clear();
 			paper.clear();
@@ -135,6 +131,9 @@ struct Sheep {
 
 	feet_targets: [(Vec3, Vec3, f32); 4],
 	feet_cycle_timeouts: [f32; 2],
+
+	head_dip: f32,
+	body_dip: f32,
 }
 
 impl Sheep {
@@ -162,6 +161,9 @@ impl Sheep {
 			target_pos: None,
 			feet_targets,
 			feet_cycle_timeouts: [0.0; 2],
+
+			head_dip: 0.0,
+			body_dip: 0.0,
 		}
 	}
 
@@ -211,7 +213,7 @@ impl Sheep {
 		self.feet_cycle_timeouts[1] -= 1.0/60.0;
 
 		for (i, &mut (ref mut start, ref mut target, ref mut phase)) in self.feet_targets.iter_mut().enumerate() {
-			*phase += 3.0/60.0;
+			*phase += 2.5/60.0;
 
 			if *phase > 1.0 && self.feet_cycle_timeouts[i/2] < 0.0 {
 				*start = *target;
@@ -233,13 +235,13 @@ impl Sheep {
 
 				if foot_diff.dot(direction) < -LEG_LENGTH * (PI/10.0).sin() || foot_diff.dot(perp_dir).abs() > LEG_LENGTH * (PI/10.0).sin() {
 					let toupd = &mut segment_to_update[i/2];
-					let dist = foot_diff.length();
+					let foot_dist = foot_diff.length();
 
-					if toupd.1 < dist {
+					if toupd.1 < foot_dist {
 						let angle_mod = 0.4f32.ease_linear((self.current_speed / MAX_SPEED).powi(3), 1.0);
 
 						toupd.0 = i;
-						toupd.1 = dist;
+						toupd.1 = foot_dist;
 						toupd.2 = foot_base + direction * LEG_LENGTH * (PI/3.0 * angle_mod).sin();
 					}
 				}
@@ -253,12 +255,15 @@ impl Sheep {
 			self.feet_targets[foot].2 = 0.0;
 			*cycle_timeout = (self.current_speed / MAX_SPEED).powi(2).ease_linear(0.7, 0.5);
 		}
+
+		self.head_dip = (4.0/60.0).ease_linear(self.head_dip, self.body_dip * 0.3);
 	}
 
 	fn draw(&mut self, paper: &mut Paper) {
 		let body_diff = self.pos - self.body_pos;
 		let body_heading = Vec2::new(body_diff.x, body_diff.z).to_angle();
-		let head_pos = self.pos + Vec3::from_y_angle(self.heading) * 0.15 + Vec3::new(0.0, BODY_SIZE/3.0, 0.0);
+		let head_pos = self.pos + Vec3::from_y_angle(self.heading) * 0.15
+			+ Vec3::new(0.0, BODY_SIZE/3.0 - self.head_dip, 0.0);
 
 		let heading_south = self.heading.sin() < 0.0;
 
@@ -269,11 +274,11 @@ impl Sheep {
 		if !heading_south { draw_head(paper); }
 
 		if self.body_pos.z >= self.pos.z {
-			Sheep::draw_body_segment(paper, self.body_pos, body_heading, BACK_SHOULDER_OFFSET, &self.feet_targets[2..4]);
-			Sheep::draw_body_segment(paper, self.pos, self.heading, FRONT_SHOULDER_OFFSET, &self.feet_targets[0..2]);
+			Sheep::draw_body_segment(paper, self.body_pos, body_heading, BACK_SHOULDER_OFFSET, &self.feet_targets[2..4], None);
+			Sheep::draw_body_segment(paper, self.pos, self.heading, FRONT_SHOULDER_OFFSET, &self.feet_targets[0..2], Some(&mut self.body_dip));
 		} else {
-			Sheep::draw_body_segment(paper, self.pos, self.heading, FRONT_SHOULDER_OFFSET, &self.feet_targets[0..2]);
-			Sheep::draw_body_segment(paper, self.body_pos, body_heading, BACK_SHOULDER_OFFSET, &self.feet_targets[2..4]);
+			Sheep::draw_body_segment(paper, self.pos, self.heading, FRONT_SHOULDER_OFFSET, &self.feet_targets[0..2], Some(&mut self.body_dip));
+			Sheep::draw_body_segment(paper, self.body_pos, body_heading, BACK_SHOULDER_OFFSET, &self.feet_targets[2..4], None);
 		}
 
 		if heading_south { draw_head(paper); }
@@ -292,12 +297,13 @@ impl Sheep {
 		(left_shoulder, right_shoulder)
 	}
 
-	fn draw_body_segment(paper: &mut Paper, pos: Vec3, heading: f32, offset: f32, feet_targets: &[(Vec3,Vec3,f32)]) {
+	fn draw_body_segment(paper: &mut Paper, pos: Vec3, heading: f32, offset: f32, feet_targets: &[(Vec3,Vec3,f32)], body_dip_out: Option<&mut f32>) {
 		assert!(feet_targets.len() >= 2);
 
 		let (left_shoulder, right_shoulder) = Sheep::calc_shoulder_positions(pos, heading, offset);
 
 		let mut shoulder_pos = [Vec3::zero(); 2];
+		let mut body_dip = 0.0;
 
 		for (i, (&(foot_start, foot_target, phase), &shoulder)) in feet_targets[0..2].iter().zip([left_shoulder, right_shoulder].iter()).enumerate() {
 			let phase = phase.clamp(0.0, 1.0);
@@ -305,12 +311,21 @@ impl Sheep {
 			let foot_pos = phase.ease_linear(foot_start, foot_target)
 				+ Vec3::new(0.0, (phase*PI).sin() * (foot_start - foot_target).length() * 0.2, 0.0);
 
-			shoulder_pos[i] = shoulder + (foot_pos - shoulder).normalize() * LEG_LENGTH * 0.1;
+			let foot_diff = foot_pos - shoulder;
+			shoulder_pos[i] = shoulder + foot_diff.normalize() * LEG_LENGTH * 0.1;
+
+			body_dip += Vec3{ y: 0.0, ..foot_diff }.length();
 
 			paper.build_line(&[to_camera(shoulder), to_camera(foot_pos)], LEG_THICKNESS, FACE_COLOR);
 		}
 
 		const SHOULDER_SIZE: f32 = 0.1;
+
+		let pos = pos + Vec3::new(0.0, -body_dip * 0.07, 0.0);
+
+		if let Some(dip) = body_dip_out {
+			*dip = body_dip;
+		}
 
 		for &shoulder in shoulder_pos.iter() {
 			let shoulder_offset = (pos - shoulder).normalize() * SHOULDER_SIZE * 0.7;
