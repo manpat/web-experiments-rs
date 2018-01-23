@@ -19,7 +19,7 @@ fn main() {
 		console::init();
 		console::set_color("#222");
 
-		let _gl = WebGLContext::new();
+		let _gl = WebGLContext::new(false);
 
 		let mut events = Vec::new();
 

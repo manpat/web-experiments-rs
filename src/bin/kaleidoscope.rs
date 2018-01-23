@@ -2,9 +2,7 @@
 
 extern crate experiments;
 use experiments::*;
-
-use experiments::rendering::mesh_builder::*;
-use experiments::rendering::framebuffer::*;
+use experiments::rendering::*;
 
 use rand::{Rng, thread_rng};
 
@@ -24,7 +22,7 @@ fn main() {
 	std::env::set_var("RUST_BACKTRACE", "1");
 
 	set_coro_as_main_loop(|| {
-		let webgl = WebGLContext::new();
+		let webgl = WebGLContext::new(false);
 
 		let mut events = Vec::new();
 

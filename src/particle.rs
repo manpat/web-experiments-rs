@@ -1,9 +1,5 @@
-use mut_rc::*;
-
 use common::*;
 use paper::*;
-
-use coro_util::*;
 
 pub struct ParticleManager {
 	paper: MutRc<Paper>,

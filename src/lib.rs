@@ -5,31 +5,13 @@
 #![feature(link_args)]
 #![feature(const_fn)]
 
-extern crate common;
+extern crate web_common;
 
 pub use resources as res;
-pub use common::*;
-
-#[macro_use] pub mod bindings;
-#[macro_use] pub mod coro_util;
-
-pub mod mut_rc;
+pub use web_common::*;
 
 pub mod resources;
-pub mod rendering;
 pub mod console;
-pub mod events;
-pub mod webgl;
-
-pub mod paper;
 pub mod particle;
 
-pub use bindings::emscripten::*;
-pub use coro_util::*;
-pub use webgl::*;
-
-pub use paper::*;
 pub use particle::*;
-
-pub use rendering::gl;
-pub use rendering::shader::*;
