@@ -34,7 +34,7 @@ fn main() {
 			gl::BlendEquation(gl::FUNC_ADD);
 			gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
 
-			webgl.set_background(Color::grey(0.2));
+			webgl.set_background(Color::hsv(110.0, 0.5, 0.77));
 		}
 
 		let paper_shader = Shader::new(res::shaders::PAPER_VS, res::shaders::PAPER_FS);
@@ -74,11 +74,6 @@ fn main() {
 				gl::Clear(gl::COLOR_BUFFER_BIT);
 			}
 
-			// sheep.sort_by(|a, b| b.pos.y.partial_cmp(&a.pos.y).unwrap());
-
-			// for s in &mut sheep { s.update() }
-			// for s in &mut sheep { s.draw(&mut paper) }
-
 			the_sheep.update();
 			the_sheep.draw(&mut paper);
 
@@ -98,8 +93,12 @@ fn screen_to_gl(screen_size: Vec2i, v: Vec2i) -> Vec2{
 }
 
 
-const BODY_COLOR: Color = Color::grey(0.8);
+// const BODY_COLOR: Color = Color::grey(0.8);
+// const FACE_COLOR: Color = Color::grey(0.3);
+
+const BODY_COLOR: Color = Color::rgb8(206, 224, 206);
 const FACE_COLOR: Color = Color::grey(0.3);
+
 const BODY_SIZE: f32 = 0.17;
 
 const HEAD_SIZE: f32 = 0.13;
@@ -266,6 +265,20 @@ impl Sheep {
 			+ Vec3::new(0.0, BODY_SIZE/3.0 - self.head_dip, 0.0);
 
 		let heading_south = self.heading.sin() < 0.0;
+
+		//// debugging
+		// if let Some(trg) = self.target_pos {
+		// 	let pos = Vec3{y: 0.0, ..self.pos};
+
+		// 	paper.build_line(
+		// 		&[to_camera(Vec3{y: 0.0, ..trg}), to_camera(pos)],
+		// 		0.03, Color::hsv(180.0, 0.5, 1.0));
+
+		// 	let heading = Vec3::from_y_angle(self.heading);
+		// 	paper.build_line(
+		// 		&[to_camera(pos), to_camera(pos+heading*0.2)],
+		// 		0.03, Color::hsv(240.0, 0.5, 1.0));
+		// }
 
 		let draw_head = |paper: &mut Paper| {
 			paper.build_circle(to_camera(head_pos), HEAD_SIZE, FACE_COLOR);
