@@ -36,8 +36,8 @@ fn main() {
 			webgl.set_background(Color::grey(0.2));
 		}
 
-		let paper_shader = Shader::new(res::shaders::PAPER_VS, res::shaders::PAPER_FS);
-		let kaleidoscope_shader = Shader::new(res::shaders::BASIC_TRANSFORM2_VS, res::shaders::KALEIDOSCOPE_FS);
+		let paper_shader = Shader::new(res::shaders::PAPER_VS, res::shaders::PAPER_FS).unwrap();
+		let kaleidoscope_shader = Shader::new(res::shaders::BASIC_TRANSFORM2_VS, res::shaders::KALEIDOSCOPE_FS).unwrap();
 		kaleidoscope_shader.use_program();
 		kaleidoscope_shader.set_uniform_f32("u_sections", thread_rng().gen_range(4u32, 8u32) as f32);
 

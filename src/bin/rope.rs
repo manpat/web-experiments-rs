@@ -33,7 +33,7 @@ fn main() {
 			gl::ClearColor(0.95, 0.95, 0.95, 1.0);
 		}
 
-		let shader = Shader::new(res::shaders::PAPER_VS, res::shaders::PAPER_FS);
+		let shader = Shader::new(res::shaders::PAPER_VS, res::shaders::PAPER_FS).unwrap();
 		shader.use_program();
 
 		let mut screen_size = Vec2i::zero();

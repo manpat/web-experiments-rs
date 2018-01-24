@@ -37,7 +37,7 @@ fn main() {
 			webgl.set_background(Color::hsv(110.0, 0.5, 0.77));
 		}
 
-		let paper_shader = Shader::new(res::shaders::PAPER_VS, res::shaders::PAPER_FS);
+		let paper_shader = Shader::new(res::shaders::PAPER_VS, res::shaders::PAPER_FS).unwrap();
 		paper_shader.use_program();
 
 		let mut paper = Paper::new();
