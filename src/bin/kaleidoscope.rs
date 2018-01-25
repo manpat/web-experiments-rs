@@ -36,8 +36,23 @@ fn main() {
 			webgl.set_background(Color::grey(0.2));
 		}
 
-		let paper_shader = Shader::new(res::shaders::PAPER_VS, res::shaders::PAPER_FS).unwrap();
-		let kaleidoscope_shader = Shader::new(res::shaders::BASIC_TRANSFORM2_VS, res::shaders::KALEIDOSCOPE_FS).unwrap();
+		let paper_shader = Paper::build_shader();
+		let kaleidoscope_shader = ShaderBuilder::new()
+			.use_highp()
+			.use_proj()
+			.varying("pos", "vec2")
+			.vertex("v_pos = position")
+
+			.uniform("tex", "sampler2D")
+			.uniform("aspect", "float")
+			.uniform("time", "float")
+			.uniform("sections", "float")
+
+			.fragment(include_str!("../../assets/kaleidoscope.fs"))
+
+			.finalize()
+			.unwrap();
+			
 		kaleidoscope_shader.use_program();
 		kaleidoscope_shader.set_uniform_f32("u_sections", thread_rng().gen_range(4u32, 8u32) as f32);
 

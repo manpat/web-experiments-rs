@@ -6,11 +6,8 @@
 #![feature(const_fn)]
 
 extern crate web_common;
-
-pub use resources as res;
 pub use web_common::*;
 
-pub mod resources;
 pub mod console;
 pub mod particle;
 

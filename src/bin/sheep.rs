@@ -37,7 +37,7 @@ fn main() {
 			webgl.set_background(Color::hsv(110.0, 0.5, 0.77));
 		}
 
-		let paper_shader = Shader::new(res::shaders::PAPER_VS, res::shaders::PAPER_FS).unwrap();
+		let paper_shader = Paper::build_shader();
 		paper_shader.use_program();
 
 		let mut paper = Paper::new();
@@ -54,7 +54,6 @@ fn main() {
 
 						let aspect = sz.x as f32 / sz.y as f32;
 
-						paper_shader.use_program();
 						paper_shader.set_proj(&Mat4::scale(Vec3::new(1.0/aspect, 1.0, 1.0)));
 					}
 
