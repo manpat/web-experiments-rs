@@ -10,6 +10,15 @@ extern "C" {
 	pub fn set_console_color(s: *const i8);
 }
 
+#[macro_export]
+macro_rules! link_console_lib {
+    () => {
+		#[allow(unused_attributes)]
+		#[link_args = "--js-library src/js/console.js"]
+		extern "C" {}
+    };
+}
+
 enum ConsoleDirtiness {
 	Clean,
 	Buffer,

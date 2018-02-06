@@ -3,9 +3,7 @@
 #![feature(generators)]
 #![feature(link_args)]
 
-#[allow(unused_attributes)]
-#[link_args = "--js-library src/js/console.js"]
-extern "C" {}
+link_console_lib! ();
 
 extern crate experiments;
 use experiments::*;
