@@ -58,7 +58,7 @@ fn main() {
 					}
 
 					Event::Up(pos) => {
-						let pos = screen_to_gl(screen_size, pos) / Vec2::new(1.0, CAMERA_ANGLE.sin());
+						let pos = screen_point_to_gl(screen_size, pos) / Vec2::new(1.0, CAMERA_ANGLE.sin());
 						the_sheep.set_target(pos);
 					}
 
@@ -81,14 +81,6 @@ fn main() {
 			yield;
 		}
 	});
-}
-
-fn screen_to_gl(screen_size: Vec2i, v: Vec2i) -> Vec2{
-	let sz = screen_size.to_vec2();
-	let aspect = sz.x as f32 / sz.y as f32;
-
-	let norm = v.to_vec2() / screen_size.to_vec2() * 2.0 - Vec2::splat(1.0);
-	norm * Vec2::new(aspect, -1.0)
 }
 
 

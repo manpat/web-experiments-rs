@@ -67,7 +67,7 @@ fn main() {
 					}
 
 					Event::Move(pos) => if dragging {
-						rope.joints[0].pos = screen_to_gl(screen_size, pos);
+						rope.joints[0].pos = screen_point_to_gl(screen_size, pos);
 					}
 
 					Event::Down(_) => { dragging = true; }
@@ -143,12 +143,4 @@ fn simulate_rope(rope: &mut Rope, gravity: Vec2) {
 		joint.vel = joint.vel + acc / 60.0;
 		joint.pos = joint.pos + joint.vel / 60.0;
 	}
-}
-
-fn screen_to_gl(screen_size: Vec2i, v: Vec2i) -> Vec2{
-	let sz = screen_size.to_vec2();
-	let aspect = sz.x as f32 / sz.y as f32;
-
-	let norm = v.to_vec2() / screen_size.to_vec2() * 2.0 - Vec2::splat(1.0);
-	norm * Vec2::new(aspect, -1.0)
 }

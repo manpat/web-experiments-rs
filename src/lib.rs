@@ -26,3 +26,11 @@ macro_rules! bin_asset {
 		include_bytes!(concat!("../../assets/", $expr))
 	}}
 }
+
+pub fn screen_point_to_gl(screen_size: Vec2i, point: Vec2i) -> Vec2 {
+	let sz = screen_size.to_vec2();
+	let aspect = sz.x as f32 / sz.y as f32;
+
+	let norm = point.to_vec2() / sz * 2.0 - Vec2::splat(1.0);
+	norm * Vec2::new(aspect, -1.0)
+}

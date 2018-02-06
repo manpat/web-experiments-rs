@@ -54,29 +54,32 @@ fn main() {
 		let tex = Texture::from_png(bin_asset!("tileset.png"));
 
 		let tile_set_info = {
-			let mut tsi = TileSetInfo { tile_infos: Vec::new(), texture_size: tex.size };
 			let texel_size = Vec2i::splat(16);
+			TileSetInfo {
+				tile_infos: vec![
+					TileInfo {
+						texel_offset: Vec2i::zero(),
+						texel_size
+					},
 
-			tsi.tile_infos.push(TileInfo {
-				texel_offset: Vec2i::zero(),
-				texel_size
-			});
-			tsi.tile_infos.push(TileInfo {
-				texel_offset: Vec2i::new(16, 0),
-				texel_size
-			});
-			tsi.tile_infos.push(TileInfo {
-				texel_offset: Vec2i::new(32, 0),
-				texel_size
-			});
+					TileInfo {
+						texel_offset: Vec2i::new(16, 0),
+						texel_size
+					},
 
-			tsi
+					TileInfo {
+						texel_offset: Vec2i::new(32, 0),
+						texel_size
+					}
+				]
+			}
 		};
 
+		let mut drawer = Drawer::new(&tex);
 		let mut world = World::new(tile_set_info);
 
-		let mut camera_zoom = 4.0;
-		let mut camera_pos = Vec2::splat(-4.0);
+		let mut camera_zoom = 6.0;
+		let mut camera_pos = Vec2::splat(-8.0);
 
 		let mut screen_size = Vec2i::zero();
 
@@ -92,7 +95,7 @@ fn main() {
 					}
 
 					Event::Down(pos) => {
-						let pos = screen_to_gl(screen_size, pos);
+						let pos = screen_point_to_gl(screen_size, pos);
 						let tile_pos = pos * Vec2::splat(camera_zoom) - camera_pos;
 						let tile_pos = tile_pos.to_vec2i();
 
@@ -119,7 +122,8 @@ fn main() {
 			shader.set_view(&view_mat);
 			shader.set_uniform_i32("u_color", 0);
 
-			world.draw();
+			world.draw(&mut drawer);
+			drawer.draw();
 
 			yield;
 		}
@@ -127,12 +131,46 @@ fn main() {
 }
 
 
-fn screen_to_gl(screen_size: Vec2i, v: Vec2i) -> Vec2{
-	let sz = screen_size.to_vec2();
-	let aspect = sz.x as f32 / sz.y as f32;
+struct Drawer {
+	mesh: Mesh,
+	builder: MeshBuilder<Vert2D>,
 
-	let norm = v.to_vec2() / screen_size.to_vec2() * 2.0 - Vec2::splat(1.0);
-	norm * Vec2::new(aspect, -1.0)
+	texture_size: Vec2i,
+}
+
+impl Drawer {
+	fn new(tex: &Texture) -> Self {
+		Drawer {
+			mesh: Mesh::new(),
+			builder: MeshBuilder::new(),
+
+			texture_size: tex.size,
+		}
+	}
+
+	fn draw(&mut self) {
+		self.builder.upload_to(&mut self.mesh);
+		self.builder.clear();
+
+		self.mesh.bind();
+		self.mesh.draw(gl::TRIANGLES);
+	}
+
+	fn draw_tile(&mut self, tile_info: &TileInfo, pos: Vec2i) {
+		let texel_factor = Vec2::splat(1.0) / self.texture_size.to_vec2();
+
+		let uv = tile_info.texel_offset.to_vec2() * texel_factor;
+		let size = tile_info.texel_size.to_vec2() * texel_factor;
+
+		let pos = pos.to_vec2();
+
+		self.builder.add_quad(&[
+			Vert2D(Vec2::new(0.0, 0.0) + pos, uv + Vec2::new(0.01, 0.98) * size),
+			Vert2D(Vec2::new(0.0, 1.0) + pos, uv + Vec2::new(0.01, 0.01) * size),
+			Vert2D(Vec2::new(1.0, 1.0) + pos, uv + Vec2::new(0.98, 0.01) * size),
+			Vert2D(Vec2::new(1.0, 0.0) + pos, uv + Vec2::new(0.98, 0.98) * size),
+		]);
+	}
 }
 
 
@@ -143,7 +181,6 @@ struct TileInfo {
 
 struct TileSetInfo {
 	tile_infos: Vec<TileInfo>,
-	texture_size: Vec2i,
 }
 
 impl TileSetInfo {
@@ -161,9 +198,6 @@ impl TileSetInfo {
 struct TileMap {
 	data: Vec<u8>,
 	size: Vec2i,
-
-	mesh: Mesh,
-	has_changed: bool,
 }
 
 impl TileMap {
@@ -171,40 +205,20 @@ impl TileMap {
 		TileMap {
 			data: vec![0; (size.x * size.y) as usize],
 			size,
-			mesh: Mesh::new(),
-			has_changed: true,
 		}
 	}
 
-	fn build_mesh(&mut self, tile_set_info: &TileSetInfo) {
-		if !self.has_changed { return }
-		self.has_changed = false;
-
-		let texel_factor = Vec2::splat(1.0) / tile_set_info.texture_size.to_vec2();
-
-		let mut mb = MeshBuilder::new();
+	fn draw_tiles(&mut self, drawer: &mut Drawer, tile_set_info: &TileSetInfo) {
 		for y in 0..self.size.y {
 			for x in 0..self.size.x {
 				let index = x + self.size.x * y;
 				let tile_idx = self.data[index as usize];
 
-				let offset = Vec2::new(x as f32, y as f32);
-
 				if let Some(info) = tile_set_info.get_tile(tile_idx as usize) {
-					let uv = info.texel_offset.to_vec2() * texel_factor;
-					let size = info.texel_size.to_vec2() * texel_factor;
-
-					mb.add_quad(&[
-						Vert2D(Vec2::new(0.0, 0.0) + offset, uv + Vec2::new(0.01, 0.98) * size),
-						Vert2D(Vec2::new(0.0, 1.0) + offset, uv + Vec2::new(0.01, 0.01) * size),
-						Vert2D(Vec2::new(1.0, 1.0) + offset, uv + Vec2::new(0.98, 0.01) * size),
-						Vert2D(Vec2::new(1.0, 0.0) + offset, uv + Vec2::new(0.98, 0.98) * size),
-					]);
+					drawer.draw_tile(info, Vec2i::new(x, y));
 				}
 			}
 		}
-
-		mb.upload_to(&mut self.mesh);
 	}
 
 	fn pos_in_bounds(&self, pos: Vec2i) -> bool {
@@ -217,7 +231,6 @@ impl TileMap {
 
 		let index = pos.x + self.size.x * pos.y;
 		self.data[index as usize] = value;
-		self.has_changed = true;
 	}
 
 	fn set_tiles_from<F>(&mut self, f: F) where F: Fn(Vec2i) -> u8 {
@@ -241,9 +254,6 @@ impl TileMap {
 
 struct World {
 	ground_layer: TileMap,
-	player_layer: TileMap,
-	ui_layer: TileMap,
-
 	tile_set_info: TileSetInfo,
 
 	player_pos: Vec3,
@@ -251,16 +261,13 @@ struct World {
 
 impl World {
 	fn new(tile_set_info: TileSetInfo) -> Self {
-		let world_size = Vec2i::splat(8);
+		let world_size = Vec2i::splat(16);
 
 		World {
 			ground_layer: TileMap::new(world_size),
-			player_layer: TileMap::new(world_size),
-			ui_layer: TileMap::new(world_size),
+			player_pos: Vec3::new(7.5, 7.5, 0.0),
 
 			tile_set_info,
-
-			player_pos: Vec3::new(3.5, 3.5, 0.0),
 		}
 	}
 
@@ -268,28 +275,12 @@ impl World {
 		Vec2i::new(self.player_pos.x as i32, self.player_pos.y as i32)
 	}
 
-	fn draw(&mut self) {
-		let player_pos = self.player_pos_to_tilespace();
-		self.player_layer.set_tiles_from(|pos| {
-			let Vec2i{x: px, y: py} = player_pos;
-			let Vec2i{x: tx, y: ty} = pos;
+	fn draw(&mut self, drawer: &mut Drawer) {
+		self.ground_layer.draw_tiles(drawer, &self.tile_set_info);
 
-			if tx == px && ty == py { 3 }
-			else { 0 }
-		});
-
-		self.ground_layer.build_mesh(&self.tile_set_info);
-		self.player_layer.build_mesh(&self.tile_set_info);
-		self.ui_layer.build_mesh(&self.tile_set_info);
-
-		self.ground_layer.mesh.bind();
-		self.ground_layer.mesh.draw(gl::TRIANGLES);
-
-		self.player_layer.mesh.bind();
-		self.player_layer.mesh.draw(gl::TRIANGLES);
-
-		self.ui_layer.mesh.bind();
-		self.ui_layer.mesh.draw(gl::TRIANGLES);
+		if let Some(info) = self.tile_set_info.get_tile(3) {
+			drawer.draw_tile(info, self.player_pos_to_tilespace());
+		}
 	}
 
 	fn set_tile(&mut self, pos: Vec2i, value: u8) {
