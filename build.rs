@@ -76,6 +76,8 @@ fn main() {
 		if let Ok(path) = path {
 			let path = path.path();
 
+			if path.extension() != Some(OsStr::new("rs")) { continue }
+
 			if let Some(Some(path)) = path.file_stem().map(OsStr::to_str) {
 				binaries.push(path.to_owned());
 			}

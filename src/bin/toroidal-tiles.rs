@@ -41,10 +41,8 @@ fn main() {
 			.use_highp()
 			.use_proj()
 			.use_view()
-			.attribute("uv", "vec2")
-			.varying("uv", "vec2")
+			.frag_attribute("uv", "vec2")
 			.uniform("color", "sampler2D")
-			.vertex("v_uv = uv")
 			.output("texture2D(u_color, v_uv)")
 			.finalize()
 			.unwrap();
@@ -58,16 +56,19 @@ fn main() {
 			TileSetInfo {
 				tile_infos: vec![
 					TileInfo {
+						name: "",
 						texel_offset: Vec2i::zero(),
 						texel_size
 					},
 
 					TileInfo {
+						name: "",
 						texel_offset: Vec2i::new(16, 0),
 						texel_size
 					},
 
 					TileInfo {
+						name: "player_idle",
 						texel_offset: Vec2i::new(32, 0),
 						texel_size
 					}
@@ -75,29 +76,25 @@ fn main() {
 			}
 		};
 
-		let mut drawer = Drawer::new(&tex);
+		let mut world_view = WorldView::new(&tex);
 		let mut world = World::new(tile_set_info);
 
-		let mut camera_zoom = 6.0;
-		let mut camera_pos = Vec2::splat(-8.0);
-
-		let mut screen_size = Vec2i::zero();
+		let mut time = 0.0;
 
 		loop {
 			for e in events.iter() {
 				match *e {
-					Event::Resize(sz) => unsafe {
-						screen_size = sz;
-						gl::Viewport(0, 0, sz.x, sz.y);
+					Event::Resize(sz) => {
+						world_view.screen_size = sz;
+
+						webgl.set_viewport(sz);
 
 						let aspect = sz.x as f32 / sz.y as f32;
 						shader.set_proj(&Mat4::scale(Vec3::new(1.0/aspect, 1.0, 1.0)));
 					}
 
 					Event::Down(pos) => {
-						let pos = screen_point_to_gl(screen_size, pos);
-						let tile_pos = pos * Vec2::splat(camera_zoom) - camera_pos;
-						let tile_pos = tile_pos.to_vec2i();
+						let tile_pos = world_view.transform_screen_coord_to_tile(pos).to_vec2i();
 
 						if let Some(v) = world.ground_layer.get_tile(tile_pos) {
 							world.set_tile(tile_pos, (v+1) % 3);
@@ -110,20 +107,17 @@ fn main() {
 				}
 			}
 
-			events.clear();
+			time += 1.0 / 60.0;
+			world.player_pos = (Vec2::from_angle(time) * 1.5 + Vec2::splat(3.0)).extend(0.0);
 
-			webgl.set_viewport(screen_size);
+			events.clear();
 
 			tex.bind_to_slot(0);
 
-			let view_mat = Mat4::scale(Vec3::splat(1.0/camera_zoom))
-				* Mat4::translate(camera_pos.extend(0.0));
-
-			shader.set_view(&view_mat);
+			shader.set_view(&world_view.get_view_matrix());
 			shader.set_uniform_i32("u_color", 0);
 
-			world.draw(&mut drawer);
-			drawer.draw();
+			world_view.draw(&world);
 
 			yield;
 		}
@@ -131,24 +125,51 @@ fn main() {
 }
 
 
-struct Drawer {
+struct WorldView {
 	mesh: Mesh,
 	builder: MeshBuilder<Vert2D>,
 
 	texture_size: Vec2i,
+
+	screen_size: Vec2i,
+	camera_zoom: f32,
+	camera_pan: Vec2,
 }
 
-impl Drawer {
+impl WorldView {
 	fn new(tex: &Texture) -> Self {
-		Drawer {
+		WorldView {
 			mesh: Mesh::new(),
 			builder: MeshBuilder::new(),
 
 			texture_size: tex.size,
+
+			screen_size: Vec2i::splat(1),
+			camera_zoom: 6.0,
+			camera_pan: Vec2::splat(-2.5),
 		}
 	}
 
-	fn draw(&mut self) {
+	fn get_view_matrix(&self) -> Mat4 {
+		Mat4::scale(Vec3::splat(1.0/self.camera_zoom))
+			* Mat4::translate(self.camera_pan.extend(0.0))
+	}
+
+	fn transform_screen_coord_to_tile(&self, point: Vec2i) -> Vec2 {
+		let pos = screen_point_to_gl(self.screen_size, point);
+		pos * Vec2::splat(self.camera_zoom) - self.camera_pan
+		// TODO: wrap
+	}
+
+	fn draw(&mut self, world: &World) {
+		self.camera_pan = -world.player_pos.to_xy();
+
+		world.ground_layer.draw_tiles(self, &world.tile_set_info);
+
+		if let Some(info) = world.tile_set_info.get_tile_by_name("player_idle") {
+			self.draw_tile(info, world.player_pos_to_tilespace());
+		}
+
 		self.builder.upload_to(&mut self.mesh);
 		self.builder.clear();
 
@@ -175,6 +196,7 @@ impl Drawer {
 
 
 struct TileInfo {
+	name: &'static str,
 	texel_offset: Vec2i,
 	texel_size: Vec2i,
 }
@@ -193,6 +215,11 @@ impl TileSetInfo {
 			None
 		}
 	}
+
+	fn get_tile_by_name(&self, name: &str) -> Option<&TileInfo> {
+		self.tile_infos.iter()
+			.find(|ti| ti.name == name)
+	}
 }
 
 struct TileMap {
@@ -208,7 +235,7 @@ impl TileMap {
 		}
 	}
 
-	fn draw_tiles(&mut self, drawer: &mut Drawer, tile_set_info: &TileSetInfo) {
+	fn draw_tiles(&self, drawer: &mut WorldView, tile_set_info: &TileSetInfo) {
 		for y in 0..self.size.y {
 			for x in 0..self.size.x {
 				let index = x + self.size.x * y;
@@ -261,26 +288,21 @@ struct World {
 
 impl World {
 	fn new(tile_set_info: TileSetInfo) -> Self {
-		let world_size = Vec2i::splat(16);
+		let world_size = Vec2i::splat(6);
+
+		let mut ground_layer = TileMap::new(world_size);
+		ground_layer.set_tiles_from(|_| 1);
 
 		World {
-			ground_layer: TileMap::new(world_size),
-			player_pos: Vec3::new(7.5, 7.5, 0.0),
+			ground_layer,
+			player_pos: Vec3::new(2.5, 2.5, 0.0),
 
 			tile_set_info,
 		}
 	}
 
 	fn player_pos_to_tilespace(&self) -> Vec2i {
-		Vec2i::new(self.player_pos.x as i32, self.player_pos.y as i32)
-	}
-
-	fn draw(&mut self, drawer: &mut Drawer) {
-		self.ground_layer.draw_tiles(drawer, &self.tile_set_info);
-
-		if let Some(info) = self.tile_set_info.get_tile(3) {
-			drawer.draw_tile(info, self.player_pos_to_tilespace());
-		}
+		self.player_pos.to_xy().to_vec2i()
 	}
 
 	fn set_tile(&mut self, pos: Vec2i, value: u8) {
