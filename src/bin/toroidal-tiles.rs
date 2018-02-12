@@ -5,7 +5,7 @@ extern crate experiments;
 use experiments::*;
 use experiments::rendering::*;
 
-use events::Event;
+use events::{Event, KeyCode};
 
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -24,6 +24,7 @@ fn main() {
 
 	set_coro_as_main_loop(|| {
 		let webgl = WebGLContext::new(false);
+		webgl.set_background(Color::grey(0.2));
 
 		let mut events = Vec::new();
 
@@ -34,8 +35,6 @@ fn main() {
 			gl::BlendEquation(gl::FUNC_ADD);
 			gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
 		}
-
-		webgl.set_background(Color::grey(0.2));
 
 		let shader = ShaderBuilder::new()
 			.use_highp()
@@ -51,9 +50,9 @@ fn main() {
 
 		let tex = Texture::from_png(bin_asset!("tileset.png"));
 
-		let tile_set_info = {
+		let tile_set = {
 			let texel_size = Vec2i::splat(16);
-			TileSetInfo {
+			TileSet {
 				tile_infos: vec![
 					TileInfo {
 						name: "",
@@ -77,9 +76,7 @@ fn main() {
 		};
 
 		let mut world_view = WorldView::new(&tex);
-		let mut world = World::new(tile_set_info);
-
-		let mut time = 0.0;
+		let mut world = World::new(tile_set);
 
 		loop {
 			for e in events.iter() {
@@ -94,21 +91,47 @@ fn main() {
 					}
 
 					Event::Down(pos) => {
-						let tile_pos = world_view.transform_screen_coord_to_tile(pos).to_vec2i();
+						let Vec2{x, y} = world_view.transform_screen_coord_to_tile(pos);
+						let tile_pos = Vec2i::new(x.floor() as i32, y.floor() as i32);
 
-						if let Some(v) = world.ground_layer.get_tile(tile_pos) {
+						if let Some(v) = world.get_tile(tile_pos) {
 							world.set_tile(tile_pos, (v+1) % 3);
 						}
 					}
 
-					Event::Up(_) => {}
+					Event::KeyDown(k) => {
+						let prev_pos = world.player_pos;
+
+						let mut did_warp = false;
+						let mut did_shift = false;
+
+						match k {
+							KeyCode::Alpha('W') => if world.move_player(Vec2i::new(0, 1)) { did_warp = true }
+							KeyCode::Alpha('S') => if world.move_player(Vec2i::new(0,-1)) { did_warp = true }
+							KeyCode::Alpha('D') => if world.move_player(Vec2i::new( 1, 0)) { did_warp = true }
+							KeyCode::Alpha('A') => if world.move_player(Vec2i::new(-1, 0)) { did_warp = true }
+	
+							KeyCode::Alpha('Q') => if world.shift_layer(-1) { did_shift = true }
+							KeyCode::Alpha('E') => if world.shift_layer( 1) { did_shift = true }
+	
+							_ => {}
+						}
+
+						if did_warp {
+							let dir = (world.player_pos - prev_pos).normalize();
+
+							world_view.camera_pos = world_view.camera_pos 
+								+ dir * world.layers[world.player_layer as usize].size.to_vec2();
+
+						} else if did_shift {
+							let cam_diff = world_view.camera_pos - prev_pos.to_vec2i().to_vec2();
+							world_view.camera_pos = world.player_pos.to_vec2i().to_vec2() + cam_diff;
+						}
+					}
 
 					_ => {}
 				}
 			}
-
-			time += 1.0 / 60.0;
-			world.player_pos = (Vec2::from_angle(time) * 1.5 + Vec2::splat(3.0)).extend(0.0);
 
 			events.clear();
 
@@ -133,7 +156,7 @@ struct WorldView {
 
 	screen_size: Vec2i,
 	camera_zoom: f32,
-	camera_pan: Vec2,
+	camera_pos: Vec2,
 }
 
 impl WorldView {
@@ -146,28 +169,48 @@ impl WorldView {
 
 			screen_size: Vec2i::splat(1),
 			camera_zoom: 6.0,
-			camera_pan: Vec2::splat(-2.5),
+			camera_pos: Vec2::splat(2.5),
 		}
 	}
 
 	fn get_view_matrix(&self) -> Mat4 {
 		Mat4::scale(Vec3::splat(1.0/self.camera_zoom))
-			* Mat4::translate(self.camera_pan.extend(0.0))
+			* Mat4::translate(-self.camera_pos.extend(0.0))
 	}
 
 	fn transform_screen_coord_to_tile(&self, point: Vec2i) -> Vec2 {
 		let pos = screen_point_to_gl(self.screen_size, point);
-		pos * Vec2::splat(self.camera_zoom) - self.camera_pan
-		// TODO: wrap
+		pos * Vec2::splat(self.camera_zoom) + self.camera_pos
 	}
 
 	fn draw(&mut self, world: &World) {
-		self.camera_pan = -world.player_pos.to_xy();
+		self.camera_pos = (1.0/60.0).ease_linear(self.camera_pos, world.player_pos);
 
-		world.ground_layer.draw_tiles(self, &world.tile_set_info);
+		{
+			let aspect = self.screen_size.x as f32 / self.screen_size.y as f32;
+			let extent = Vec2::new(self.camera_zoom*aspect + 1.0, self.camera_zoom + 1.0);
 
-		if let Some(info) = world.tile_set_info.get_tile_by_name("player_idle") {
-			self.draw_tile(info, world.player_pos_to_tilespace());
+			let bottom = (self.camera_pos - extent).to_vec2i();
+			let top = (self.camera_pos + extent).to_vec2i();
+
+			let player_info = world.tile_set.get_tile_info_by_name("player_idle")
+				.expect("missing player sprite");
+			
+			for y in bottom.y..top.y {
+				for x in bottom.x..top.x {
+					let pos = Vec2i::new(x, y);
+
+					if let Some(tile_idx) = world.get_tile(pos) {
+						if let Some(info) = world.tile_set.get_tile_info(tile_idx as usize) {
+							self.draw_tile(info, pos);
+						}
+					}
+
+					if world.wrap_position(pos) == world.player_pos.to_vec2i() {
+						self.draw_tile(player_info, pos);
+					}
+				}
+			}
 		}
 
 		self.builder.upload_to(&mut self.mesh);
@@ -201,12 +244,12 @@ struct TileInfo {
 	texel_size: Vec2i,
 }
 
-struct TileSetInfo {
+struct TileSet {
 	tile_infos: Vec<TileInfo>,
 }
 
-impl TileSetInfo {
-	fn get_tile(&self, index: usize) -> Option<&TileInfo> {
+impl TileSet {
+	fn get_tile_info(&self, index: usize) -> Option<&TileInfo> {
 		if index == 0 {
 			None
 		} else if index-1 < self.tile_infos.len() {
@@ -216,7 +259,7 @@ impl TileSetInfo {
 		}
 	}
 
-	fn get_tile_by_name(&self, name: &str) -> Option<&TileInfo> {
+	fn get_tile_info_by_name(&self, name: &str) -> Option<&TileInfo> {
 		self.tile_infos.iter()
 			.find(|ti| ti.name == name)
 	}
@@ -232,19 +275,6 @@ impl TileMap {
 		TileMap {
 			data: vec![0; (size.x * size.y) as usize],
 			size,
-		}
-	}
-
-	fn draw_tiles(&self, drawer: &mut WorldView, tile_set_info: &TileSetInfo) {
-		for y in 0..self.size.y {
-			for x in 0..self.size.x {
-				let index = x + self.size.x * y;
-				let tile_idx = self.data[index as usize];
-
-				if let Some(info) = tile_set_info.get_tile(tile_idx as usize) {
-					drawer.draw_tile(info, Vec2i::new(x, y));
-				}
-			}
 		}
 	}
 
@@ -280,32 +310,73 @@ impl TileMap {
 }
 
 struct World {
-	ground_layer: TileMap,
-	tile_set_info: TileSetInfo,
+	layers: Vec<TileMap>,
+	tile_set: TileSet,
 
-	player_pos: Vec3,
+	player_pos: Vec2,
+	player_layer: i32,
 }
 
 impl World {
-	fn new(tile_set_info: TileSetInfo) -> Self {
-		let world_size = Vec2i::splat(6);
+	fn new(tile_set: TileSet) -> Self {
+		let mut layers = Vec::new();
 
-		let mut ground_layer = TileMap::new(world_size);
-		ground_layer.set_tiles_from(|_| 1);
+		for i in 0..6 {
+			let world_size = Vec2i::splat(2i32.pow(i + 2));
+
+			let mut layer = TileMap::new(world_size);
+			layer.set_tiles_from(|v| if v.x.min(v.y) > 0 {1} else {2});
+			layers.push(layer);
+		}
 
 		World {
-			ground_layer,
-			player_pos: Vec3::new(2.5, 2.5, 0.0),
+			layers,
+			tile_set,
 
-			tile_set_info,
+			player_pos: Vec2::new(2.5, 2.5),
+			player_layer: 2,
 		}
 	}
 
-	fn player_pos_to_tilespace(&self) -> Vec2i {
-		self.player_pos.to_xy().to_vec2i()
+	fn shift_layer(&mut self, dir: i32) -> bool {
+		let new_layer = self.player_layer + dir;
+		if new_layer < 0 || new_layer >= self.layers.len() as _ { return false }
+
+		self.player_layer += dir;
+		self.player_pos = self.player_pos * Vec2::splat(2.0f32.powi(dir));
+		true
+	}
+
+	fn move_player(&mut self, dir: Vec2i) -> bool {
+		self.player_pos = self.player_pos + dir.to_vec2();
+		let layer_size = 2.0f32.powi(self.player_layer + 2);
+
+		let mut did_warp = false;
+
+		if self.player_pos.x < 0.0 { self.player_pos.x += layer_size; did_warp = true; }
+		if self.player_pos.x >= layer_size { self.player_pos.x -= layer_size; did_warp = true; }
+
+		if self.player_pos.y < 0.0 { self.player_pos.y += layer_size; did_warp = true; }
+		if self.player_pos.y >= layer_size { self.player_pos.y -= layer_size; did_warp = true; }
+
+		did_warp
 	}
 
 	fn set_tile(&mut self, pos: Vec2i, value: u8) {
-		self.ground_layer.set_tile(pos, value);
+		let pos = self.wrap_position(pos);
+		self.layers[self.player_layer as usize].set_tile(pos, value);
+	}
+
+	fn get_tile(&self, pos: Vec2i) -> Option<u8> {
+		let pos = self.wrap_position(pos);
+		self.layers[self.player_layer as usize].get_tile(pos)
+	}
+
+	fn wrap_position(&self, pos: Vec2i) -> Vec2i {
+		let layer = &self.layers[self.player_layer as usize];
+
+		Vec2i::new(
+			(pos.x%layer.size.x + layer.size.x) % layer.size.x,
+			(pos.y%layer.size.y + layer.size.y) % layer.size.y)
 	}
 }
