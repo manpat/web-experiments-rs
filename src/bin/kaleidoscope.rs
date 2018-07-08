@@ -61,7 +61,7 @@ fn main() {
 			.finalize();
 
 		main_fb.bind();
-		unsafe { gl::Clear(gl::COLOR_BUFFER_BIT); }
+		webgl.clear_color();
 		Framebuffer::unbind();
 
 		let quad: Mesh = {
@@ -125,12 +125,12 @@ fn main() {
 			}
 
 			main_fb.bind();
-			unsafe { gl::Viewport(0, 0, 512, 512); }
+			main_fb.update_viewport(&webgl);
 			paper_shader.use_program();
 			paper.draw();
 			Framebuffer::unbind();
 
-			unsafe { gl::Viewport(0, 0, screen_size.x, screen_size.y); }
+			webgl.set_viewport(screen_size);
 
 			let _guard = main_fb.get_target(0).unwrap().bind_guard();
 			kaleidoscope_shader.use_program();

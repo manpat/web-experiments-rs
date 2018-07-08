@@ -9,16 +9,6 @@ use experiments::rendering::*;
 
 use events::Event;
 
-#[derive(Copy, Clone)]
-pub struct KalVert (Vec2);
-
-impl Vertex for KalVert {
-	fn get_layout() -> VertexLayout {
-		VertexLayout::new::<Self>()
-			.add_binding(0, 2, 0)
-	}
-}
-
 fn main() {
 	std::env::set_var("RUST_BACKTRACE", "1");
 
@@ -69,9 +59,7 @@ fn main() {
 			events.clear();
 			paper.clear();
 
-			unsafe {
-				gl::Clear(gl::COLOR_BUFFER_BIT);
-			}
+			webgl.clear_color();
 
 			the_sheep.update();
 			the_sheep.draw(&mut paper);
