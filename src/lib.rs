@@ -1,5 +1,4 @@
 #![feature(generators, generator_trait, box_syntax)]
-#![feature(inclusive_range_syntax)]
 #![feature(specialization)]
 #![feature(ord_max_min)]
 #![feature(link_args)]
