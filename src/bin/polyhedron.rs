@@ -107,8 +107,8 @@ fn main() {
 			inset_rotation_delta = inset_rotation_delta.scale(1.0 - DT / 2.0) * generate_rotation(time);
 
 			inset_rotation = (inset_rotation * inset_rotation_delta).normalize();
-			outer_rotation = (16.0 * DT).ease_linear(outer_rotation, inset_rotation).normalize();
-			outer2_rotation = (16.0 * DT).ease_linear(outer2_rotation, outer_rotation).normalize();
+			outer_rotation = (6.0 * DT).ease_linear(outer_rotation, inset_rotation).normalize();
+			outer2_rotation = (6.0 * DT).ease_linear(outer2_rotation, outer_rotation).normalize();
 
 			webgl.clear_all();
 			webgl.set_viewport(screen_size);
