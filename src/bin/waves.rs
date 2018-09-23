@@ -51,18 +51,21 @@ fn main() {
 		let mut mesh = Mesh::new();
 		let mut mb = MeshBuilder::new();
 
-		let generate_waves = move || {
+		let generate_waves = || {
 			let mut waves = Vec::new();
+			let mut rng = thread_rng();
 
 			let y_offsets = [0.2, -0.1, -0.4];
 
 			let base_hue = random::<f32>() * 360.0;
 			let hue_delta = random::<f32>() * 50.0 - 25.0;
+			let hue_variance = hue_delta.abs() / 25.0;
 
-			let base_value = random::<f32>() * 0.3 + 0.7;
-			let value_delta = (random::<f32>() + 0.3) * (0.7 - base_value) / 3.0;
+			let value_dir = if random() { 1.0 } else { -1.0 };
+			let value_delta = (random::<f32>() * 0.3 + 0.7) * (2.0 - hue_variance.sqrt()*1.5) * 0.1 * value_dir;
+			let base_value = random::<f32>() * 0.1 + 0.8 - value_delta * 1.5;
 
-			let saturation = random::<f32>() * 0.3 + 0.5;
+			let saturation = 0.9 - (base_value + hue_variance.sqrt() * 0.5) * random::<f32>() * 0.3;
 
 			let base_color = Color::hsv(base_hue, saturation, base_value);
 
@@ -72,7 +75,7 @@ fn main() {
 				let value = base_value + value_delta * i;
 
 				let target_color = Color::hsv(hue, saturation, value);
-				waves.push(Wave::new(base_color, target_color, y_off));
+				waves.push(Wave::new(&mut rng, base_color, target_color, y_off));
 			}
 
 			(base_color, waves)
@@ -145,9 +148,7 @@ struct Wave {
 }
 
 impl Wave {
-	fn new(wave_color: Color, wave_color_target: Color, y_offset: f32) -> Self {
-		let mut rng = thread_rng();
-
+	fn new<R: Rng>(rng: &mut R, wave_color: Color, wave_color_target: Color, y_offset: f32) -> Self {
 		Wave {
 			phase: rng.gen_range(0.0, 2.0 * PI),
 			amp_phase: rng.gen_range(0.0, 2.0 * PI),
